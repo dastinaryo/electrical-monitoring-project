@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+    <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="description" content="">
+    <meta name="author" content="">
+
+    <title>Data Meter Listrik</title>
+
+    <!-- Favicons -->
+    <link rel="icon" href={{ url_for('static', filename="/assets_2/images/fav.png") }}>
+
+    <link rel="stylesheet" href={{ url_for('static', filename="/assets_2/css/bootstrap.min.css") }}  type="text/css">
+    <link rel="stylesheet" href={{ url_for('static', filename="/assets_2/css/unicons.css") }}  type="text/css">
+    <link rel="stylesheet" href={{ url_for('static', filename="/assets_2/css/owl.carousel.min.css") }}  type="text/css">
+    <link rel="stylesheet" href={{ url_for('static', filename="/assets_2/css/owl.theme.default.min.css") }}  type="text/css">
+
+
+    <!-- MAIN STYLE -->
+    <link rel="stylesheet" href={{ url_for('static', filename="/assets_2/css/tooplate-style.css") }}  type="text/css">
+
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+
+    <script src={{ url_for('static', filename='/assets/js/firebase-config.js') }}></script>
+    
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+
+        .data-container {
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            text-align: center;
+            margin: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th, td {
+            padding: 10px;
+            border: 1px solid #ddd;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+    </head>
+    <body>
+        
+        <div class="data-container">
+            <h3>Data Meter Listrik</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tanggal</th>
+                        <th>kWh</th>
+                        <th>Daya</th>
+                        <th>Total Daya</th>
+                        <th>Biaya</th>
+                        <th>Timestamp</th>
+                    </tr>
+                </thead>
+                <tbody data-firebase="hasil">
+                </tbody>
+            </table>
+            <script>
+                var currentDate = new Date();
+                var tanggal = currentDate.getDate() + "-" + (currentDate.getMonth() + 1) + "-" + currentDate.getFullYear();
+
+                // console.log(tanggal)
+                const hasil = document.querySelector('[data-firebase="hasil"]');
+
+                // Mendapatkan referensi ke database
+                const database = firebase.database();
+                const dataRef = database.ref("/collection_data/electricity data/"+tanggal);
+                const dataRef_tms = database.ref("/collection_data/electricity data/"+tanggal+"/timestamp");
+
+                var temp_biaya = 0;
+                var temp_total_daya = 0;
+
+                // Mendapatkan data satu kali (once)
+                dataRef.on("value", (snapshot) => {
+                    const data = snapshot.val();
+
+                    // Cek apakah data ada atau tidak
+                    if (data) {
+                        if (data.biaya>=0){
+                            temp_biaya=hitung_biaya(data.daya, data.kwh);
+                            temp_total_daya = (data.total_daya + data.daya);
+                            
+                            // firebase.database().ref("/collection_data/electricity data/"+tanggal).update({
+                            //     "biaya" : parseInt(temp_biaya)
+                            //     // "total_daya" : parseInt(temp_total_daya)
+                            // })
+
+                            // Jika data ada, tampilkan data seperti yang Anda lakukan sebelumnya
+                            let htmlString = `
+                                <tr>
+                                    <td>${tanggal}</td>
+                                    <td>${data.kwh}</td>
+                                    <td>${data.daya}</td>
+                                    <td>${data.total_daya}</td>
+                                    <td>${data.biaya}</td>
+                                    <td>${data.timestamp}</td>
+                                </tr>`;
+                            hasil.innerHTML = `<tbody>${htmlString}</tbody>`;
+                        } else{
+                            // Jika data tidak ada, maka akan set biaya 0
+                            firebase.database().ref("/collection_data/electricity data/"+tanggal).set({
+                                "biaya" : 0
+                            })
+                        }
+                    } else {
+                        // Jika data tidak ada, maka akan set biaya 0
+                        firebase.database().ref("/collection_data/electricity data/"+tanggal).set({
+                            "biaya" : 0
+                        })
+                    }
+                });
+
+                dataRef_tms.on("value", (snapshot) => {
+                    firebase.database().ref("/collection_data/electricity data/"+tanggal).update({
+                                "biaya" : parseInt(temp_biaya),
+                                "total_daya" : parseInt(temp_total_daya)
+                            })
+                });
+            </script>
+
+        </div>
+        <div class="data-container">
+            <h3>Analisis Penggunaan Listrik</h3>
+
+            <form action="/api/fuzzyLogic" method="post">
+                <label for="tanggal_awal">Dari tanggal:</label>
+                <input type="date" id="tanggal_awal" name="tanggal_awal" required>
+
+                <label for="tanggal_akhir">Sampai tanggal:</label>
+                <input type="date" id="tanggal_akhir" name="tanggal_akhir" required>
+
+                <!-- <input type="submit" value="Submit"> -->
+            </form>
+            <button type="submit" id="submit" class="btn-search" onclick="fuzzys()">Submit</button>
+
+            <table id="result">
+            </table>
+
+            <script>
+                function fuzzys(){
+                    // Menggunakan Fetch API untuk mengambil data dari server Flask
+                    var tanggal_awal = document.getElementById('tanggal_awal').value;
+                    var tanggal_akhir = document.getElementById('tanggal_akhir').value;
+
+                    const dataToSend = {
+                        tanggal_awal: tanggal_awal,
+                        tanggal_akhir: tanggal_akhir,
+                    };
+
+                    fetch('http://localhost:5000/api/fuzzyLogic', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(dataToSend),
+                    })
+
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log('Respons dari server:', data);
+
+                        const responseMessageElement = document.getElementById('result');
+                        let htmlString = "";
+                        data.forEach(item => {
+                            const listItem = document.createElement('li');
+                            htmlString += `
+                                <tr>
+                                    <td>${item.tanggal}</td>
+                                    <td>${item.kwh}</td>
+                                    <td>${item.daya}</td>
+                                    <td>${item.total_daya}</td>
+                                    <td>${item.biaya}</td>
+                                    <td>${item.timestamp}</td>
+                                    <td>${item.defuzzifikasi}</td>
+                                </tr>
+                                `;
+                        });
+                        responseMessageElement.innerHTML = `
+                            <thead>
+                                <tr>
+                                    <th>Tanggal</th>
+                                    <th>kWh</th>
+                                    <th>Daya</th>
+                                    <th>Total Daya</th>
+                                    <th>Biaya</th>
+                                    <th>Timestamp</th>
+                                    <th>Penggunaan Listrik</th>
+                                </tr>
+                            </thead>
+                            <tbody>${htmlString}</tbody>
+                            `;
+                        // responseMessageElement.innerHTML = ``;
+                        // data.forEach(item => {
+                        //     const listItem = document.createElement('li');
+                        //     listItem.textContent = item;
+                        //     dataListElement.appendChild(listItem);
+                        // });
+                    })
+                    .catch(error => console.error('Error:', error));
+                }
+                function hitung_biaya(daya, kwh){
+                    if (daya <= 900){
+                        return kwh * 1352}
+                    else if (daya <= 1300 || daya <= 2200){
+                        return kwh * 1467}
+                    else if (daya <= 3500 || daya <= 5500){
+                        return kwh * 1699}
+                }
+            </script>
+        </div>
+
+        
+        
+        <!-- <script src={{ url_for('static', filename='/assets/js/script.js') }}></script> -->
+
+        <script src={{ url_for('static', filename='/assets_2/js/jquery-3.3.1.min.js') }}></script>
+        <script src={{ url_for('static', filename='/assets_2/js/popper.min.js') }}></script>
+        <script src={{ url_for('static', filename='/assets_2/js/bootstrap.min.js') }}></script>
+        <script src={{ url_for('static', filename='/assets_2/js/Headroom.js') }}></script>
+        <script src={{ url_for('static', filename='/assets_2/js/jQuery.headroom.js') }}></script>
+        <script src={{ url_for('static', filename='/assets_2/js/owl.carousel.min.js') }}></script>
+        <script src={{ url_for('static', filename='/assets_2/js/smoothscroll.js') }}></script>
+        <script src={{ url_for('static', filename='/assets_2/js/custom.js') }}></script>
+        <script src={{ url_for('static', filename='/assets_2/js/client_side.js') }}></script>
+  </body>
+</html>
